@@ -148,7 +148,7 @@
   table.adm th{font-size:11px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;font-weight:700}
   table.adm td .who{font-weight:700}
   table.adm td .small{color:var(--muted);font-size:12px}
-  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800}
+  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800;white-space:nowrap}
   .badge.booked{background:#fdeee6;color:#b15a1f}
   .badge.requested{background:#fff4d6;color:#9a6700}
   .badge.confirmed{background:#e6f5ee;color:#1f7a4d}
@@ -169,6 +169,30 @@
   .admbar .cnt{font-size:12.5px;color:var(--muted)}
   .linkbtn{background:none;border:0;color:var(--crimson);font-weight:700;cursor:pointer;font-size:12.5px;font-family:inherit}
   .tenant-tip{font-size:11.5px;color:#9aa1b1;text-align:center;margin-top:18px}
+
+  /* 管理一覧：狭幅はカード型（1申込=1カード・操作ボタンは下部）。
+     スマホで承認するスタッフ向け＝仕様書v1.0 AC-9（375pxで横スクロールなし）の参照実装。 */
+  @media (max-width:720px){
+    .admscroll{overflow-x:visible}
+    table.adm{display:block}
+    table.adm thead{display:none}
+    table.adm tbody{display:block}
+    table.adm tr{
+      display:block;border:1px solid var(--line);border-radius:12px;background:#fff;
+      padding:6px 14px 12px;margin:0 0 12px;box-shadow:0 2px 10px rgba(26,34,56,.05);
+    }
+    table.adm tr.hidden{display:none}
+    table.adm td{display:block;border-bottom:1px solid var(--line);padding:9px 0}
+    table.adm tr td:last-child{border-bottom:0}
+    table.adm td[data-label]::before{
+      content:attr(data-label);display:block;font-size:10.5px;font-weight:700;
+      letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;
+    }
+    table.adm td.acts{display:flex;flex-wrap:wrap;gap:8px;padding-top:12px;border-bottom:0}
+    table.adm td.acts .actbtn{margin:0;padding:10px 14px;font-size:13px;flex:1 1 auto}
+    table.adm tr.msgrow{margin-top:-6px;border-top:0;border-top-left-radius:0;border-top-right-radius:0;padding-top:0}
+    table.adm tr.msgrow td{border-bottom:0;padding:10px 0 4px}
+  }
 </style>
 </head>
 <body>
@@ -189,7 +213,7 @@
 </header>
 
 <div class="wrap">
-  <div class="viewtabs">
+  <div class="viewtabs" id="viewTabs">
     <button id="tabBook" class="active" onclick="setView('book')"></button>
     <button id="tabAdmin" onclick="setView('admin')"></button>
   </div>
@@ -454,6 +478,9 @@ const I18N = {
 };
 
 /* ============================ STATE ============================ */
+// 管理ビューは ?admin=1 または #admin 付きURLでのみ表示（公開デモで申込者には見せない。
+// 本番では管理画面は別アプリ＋ログイン制になるため、これはプロトタイプ限定の措置）
+const ADMIN_MODE = new URLSearchParams(location.search).has("admin") || location.hash === "#admin";
 let lang = TENANT.defaultLang;
 let view = "book";
 let state = { visit:"trial", classId:null, date:null, picks:[] }; // picks: 最大2件 {date,start,range}
@@ -776,6 +803,7 @@ function restart(){ state={visit:"trial",classId:null,date:null,picks:[],booking
 
 /* ============================ VIEW SWITCH ============================ */
 function setView(v){
+  if(v==="admin" && !ADMIN_MODE) v="book";
   view=v;
   document.getElementById("tabBook").classList.toggle("active",v==="book");
   document.getElementById("tabAdmin").classList.toggle("active",v==="admin");
@@ -831,12 +859,12 @@ function adminRender(){
     actions+=`<button class="actbtn no" onclick="toggleMsg('${b.id}')">✉ ${t("msgShow")}</button>`;
     const reasonHtml=((b.status==="rejected"||b.status==="cancelled")&&b.reason)?`<div class="reason">${esc(b.reason)}</div>`:"";
     tr.innerHTML=
-      `<td>${adminFmtDate(b)}</td>`+
-      `<td>${classNameById(b.classId)}<div class="small">${visitLabel(b.visit)}</div></td>`+
-      `<td><span class="who">${esc(b.part)||"-"}</span><div class="small">${b.age?(b.age+(lang==="ja"?"歳":"y")):""}${b.guardian?" / "+esc(b.guardian):""}</div></td>`+
-      `<td class="small">${esc(b.phone)}<br>${esc(b.email)}</td>`+
-      `<td>${statusBadge(b)}${reasonHtml}</td>`+
-      `<td>${actions}</td>`;
+      `<td data-label="${t("colDate")}">${adminFmtDate(b)}</td>`+
+      `<td data-label="${t("colClass")}">${classNameById(b.classId)}<div class="small">${visitLabel(b.visit)}</div></td>`+
+      `<td data-label="${t("colName")}"><span class="who">${esc(b.part)||"-"}</span><div class="small">${b.age?(b.age+(lang==="ja"?"歳":"y")):""}${b.guardian?" / "+esc(b.guardian):""}</div></td>`+
+      `<td data-label="${t("colContact")}" class="small">${esc(b.phone)}<br>${esc(b.email)}</td>`+
+      `<td data-label="${t("colStatus")}">${statusBadge(b)}${reasonHtml}</td>`+
+      `<td class="acts">${actions}</td>`;
     body.appendChild(tr);
     // 却下/取消の理由入力（画面内インライン）
     if(pendingReason && pendingReason.id===b.id){
@@ -905,6 +933,7 @@ function seedDemo(){
 }
 
 /* init */
+if(!ADMIN_MODE) document.getElementById("viewTabs").classList.add("hidden");
 renderAll(); go(0); setView("book");
 </script>
 </body>
